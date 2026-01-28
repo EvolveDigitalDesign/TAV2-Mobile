@@ -1,0 +1,27 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native/babel-preset/package.json'
+
+platform :ios, min_ios_version_supported
+prepare_react_native!
+
+target 'TAV2Mobile' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true
+  )
+
+  target 'TAV2MobileTests' do
+    inherit! :complete
+  end
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
+  end
+end

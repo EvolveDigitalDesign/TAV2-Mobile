@@ -1,0 +1,14 @@
+---
+name: mobile-app
+description: Handles behavior for development of the mobile app
+---
+
+This project is for converting a web app (located in @TAV2) to a mobile app (@TAV2-Mobile). The shared backend for both apps is located in @pnae-django.
+
+Do not make any changes to the @TAV2, and make changes only when absolutely necessary to @pnae-django. The bulk of the project should take place in @TAV2-Mobile.
+
+The mobile app should be compatible, and ready for packaging as both an iOS and Android app, intended primarily for use on iPads.
+
+The primary difference in the mobile app will be an "online/offline" mode switch. Assuming the role of Crew supervisor as a base, when "offline mode" is selected, active and queued records associated with the rig the crew supervisor is assigned to will be "checked out" locally and editable only by the current mobile app instance. They will be "checked back in" when online mode is reactivated.
+
+Please maximize pre-existing resources, and consider modular design and scalability anticipating updates to both the web app and mobile app in the future.
