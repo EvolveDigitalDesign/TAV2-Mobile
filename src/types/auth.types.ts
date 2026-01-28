@@ -140,4 +140,5 @@ export interface AuthContextProps {
   ) => Promise<{access_token: string; refresh_token: string; user: User}>;
   onLogout?: () => Promise<void>;
   hasPermission?: (permission: string) => boolean;
+  refreshToken?: () => Promise<boolean>;
 }

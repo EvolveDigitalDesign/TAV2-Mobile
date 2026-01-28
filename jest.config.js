@@ -4,6 +4,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -13,4 +14,6 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(react-native|@react-native|@react-navigation)/)',
   ],
+  moduleDirectories: ['node_modules', '<rootDir>'],
+  extensionsToTreatAsEsm: [],
 };
