@@ -284,14 +284,36 @@ export const checkoutRecords = async (
       // If the checkout endpoint doesn't exist yet, fallback to fetching DWRs directly
       console.warn('Checkout endpoint not available, using fallback:', apiError);
       
-      // Fallback: Fetch DWRs directly
-      const dwrResponse = await apiClient.get('/api/workrecords/', {
+      // Fallback: Fetch DWRs for active subprojects
+      // First get subprojects for the rig, then fetch DWRs by subproject
+      // Endpoint: /api/wells/subprojects/
+      const subprojectsRes = await apiClient.get('/api/wells/subprojects/', {
         params: {
-          rig_id: rigId,
-          status__in: 'draft,pending,in_progress,in_review',
+          assigned_rig: rigId,
+          status: 'active',
           page_size: 100,
         },
       });
+      
+      const subprojectIds = (subprojectsRes.data.results || subprojectsRes.data || [])
+        .map((sp: { id: number }) => sp.id);
+      
+      // Fetch DWRs for each subproject (backend doesn't support filtering by multiple subprojects at once)
+      // Note: In production, a dedicated checkout endpoint would be more efficient
+      const dwrPromises = subprojectIds.map((spId: number) =>
+        apiClient.get('/api/workrecords/dailyworkrecords/', {
+          params: {
+            subproject_id: spId,
+            page_size: 50,
+          },
+        })
+      );
+      
+      const dwrResponses = await Promise.all(dwrPromises);
+      const allDwrs = dwrResponses.flatMap(res => res.data.results || res.data || []);
+      
+      // Create a mock response structure
+      const dwrResponse = { data: { results: allDwrs } };
       
       const dwrList = dwrResponse.data.results || dwrResponse.data || [];
       
@@ -354,8 +376,11 @@ export const checkoutRecords = async (
 
       // Fetch related data if not included
       try {
-        // Fetch work assignments
-        const waResponse = await apiClient.get(`/api/workrecords/${record.id}/work-assignments/`);
+        // Fetch work assignments for this DWR
+        // Endpoint: /api/workrecords/work-assignments/?daily_work_record={id}
+        const waResponse = await apiClient.get('/api/workrecords/work-assignments/', {
+          params: { daily_work_record: record.id, page_size: 100 },
+        });
         const workAssignments = (waResponse.data.results || waResponse.data || []).map(
           (wa: Record<string, unknown>) => convertToOfflineWorkAssignment(wa, offlineDWR.local_id)
         );
@@ -366,8 +391,11 @@ export const checkoutRecords = async (
           await saveWorkAssignment(wa);
         }
 
-        // Fetch time records
-        const trResponse = await apiClient.get(`/api/workrecords/${record.id}/time-records/`);
+        // Fetch time records for this DWR
+        // Endpoint: /api/workrecords/employee-time-records/?daily_work_record={id}
+        const trResponse = await apiClient.get('/api/workrecords/employee-time-records/', {
+          params: { daily_work_record: record.id, page_size: 100 },
+        });
         const timeRecords = (trResponse.data.results || trResponse.data || []).map(
           (tr: Record<string, unknown>) => convertToOfflineTimeRecord(tr, offlineDWR.local_id)
         );
@@ -378,8 +406,11 @@ export const checkoutRecords = async (
           await saveTimeRecord(tr);
         }
 
-        // Fetch charge record
-        const crResponse = await apiClient.get(`/api/workrecords/${record.id}/charge-record/`);
+        // Fetch charge records for this DWR
+        // Endpoint: /api/workrecords/charge-records/?daily_work_record={id}
+        const crResponse = await apiClient.get('/api/workrecords/charge-records/', {
+          params: { daily_work_record: record.id, page_size: 100 },
+        });
         if (crResponse.data) {
           const chargeRecord = convertToOfflineChargeRecord(crResponse.data, offlineDWR.local_id);
           offlineDWR.charge_record = chargeRecord;
@@ -439,8 +470,9 @@ const fetchAndSaveReferenceData = async (rigId: number): Promise<void> => {
     await fetchAndSaveProjectsSubprojects(rigId);
 
     // Fetch employees for the rig
-    const employeesResponse = await apiClient.get('/api/employees/', {
-      params: { rig_id: rigId, is_active: true, page_size: 500 },
+    // Endpoint: /api/employees/employees/
+    const employeesResponse = await apiClient.get('/api/employees/employees/', {
+      params: { assigned_rig: rigId, is_active: true, page_size: 500 },
     });
     await saveReferenceData(
       STORAGE_KEYS.EMPLOYEES,
@@ -448,22 +480,25 @@ const fetchAndSaveReferenceData = async (rigId: number): Promise<void> => {
     );
 
     // Fetch employee types
-    const typesResponse = await apiClient.get('/api/employee-types/');
+    // Endpoint: /api/employees/employee-types/
+    const typesResponse = await apiClient.get('/api/employees/employee-types/');
     await saveReferenceData(
       STORAGE_KEYS.EMPLOYEE_TYPES,
       typesResponse.data.results || typesResponse.data || []
     );
 
     // Fetch work descriptions
-    const wdResponse = await apiClient.get('/api/work-descriptions/');
+    // Endpoint: /api/tenants/work-descriptions/
+    const wdResponse = await apiClient.get('/api/tenants/work-descriptions/');
     await saveReferenceData(
       STORAGE_KEYS.WORK_DESCRIPTIONS,
       wdResponse.data.results || wdResponse.data || []
     );
 
     // Fetch inventory items
+    // Endpoint: /api/inventory/inventory/
     try {
-      const invResponse = await apiClient.get('/api/inventory/', {
+      const invResponse = await apiClient.get('/api/inventory/inventory/', {
         params: { page_size: 500 },
       });
       await saveReferenceData(
@@ -475,8 +510,9 @@ const fetchAndSaveReferenceData = async (rigId: number): Promise<void> => {
     }
 
     // Fetch service items
+    // Endpoint: /api/inventory/services/
     try {
-      const svcResponse = await apiClient.get('/api/services/', {
+      const svcResponse = await apiClient.get('/api/inventory/services/', {
         params: { page_size: 500 },
       });
       await saveReferenceData(
@@ -498,7 +534,8 @@ const fetchAndSaveReferenceData = async (rigId: number): Promise<void> => {
 const fetchAndSaveProjectsSubprojects = async (rigId: number): Promise<void> => {
   try {
     // Fetch subprojects assigned to this rig
-    const subprojectsResponse = await apiClient.get('/api/subprojects/', {
+    // Endpoint: /api/wells/subprojects/
+    const subprojectsResponse = await apiClient.get('/api/wells/subprojects/', {
       params: { 
         assigned_rig: rigId, 
         is_active: true,
@@ -507,9 +544,9 @@ const fetchAndSaveProjectsSubprojects = async (rigId: number): Promise<void> => 
     });
     
     const subprojects = subprojectsResponse.data.results || subprojectsResponse.data || [];
-    const projectIds = new Set<number>();
+    const savedProjects = new Set<number>();
 
-    // Save subprojects and collect unique project IDs
+    // Save subprojects and extract project info from nested data
     for (const sp of subprojects) {
       const offlineSubproject: OfflineSubproject = {
         server_id: sp.id,
@@ -531,41 +568,26 @@ const fetchAndSaveProjectsSubprojects = async (rigId: number): Promise<void> => 
 
       await saveSubproject(offlineSubproject);
 
-      // Track project ID for later fetching
-      if (sp.project?.id) {
-        projectIds.add(sp.project.id);
-      } else if (sp.project_id) {
-        projectIds.add(sp.project_id);
-      }
-    }
-
-    console.log(`Saved ${subprojects.length} subprojects for rig ${rigId}`);
-
-    // Fetch and save the related projects
-    for (const projectId of projectIds) {
-      try {
-        const projectResponse = await apiClient.get(`/api/projects/${projectId}/`);
-        const project = projectResponse.data;
-
+      // Save project info from nested data in subproject (no separate endpoint needed)
+      if (sp.project && sp.project.id && !savedProjects.has(sp.project.id)) {
         const offlineProject: OfflineProject = {
-          server_id: project.id,
-          name: project.name,
-          description: project.description,
-          customer_id: project.customer?.id || project.customer_id,
-          customer_name: project.customer?.name || project.customer_name,
-          status: project.status || 'active',
-          start_date: project.start_date,
-          end_date: project.end_date,
-          is_active: project.is_active !== false,
+          server_id: sp.project.id,
+          name: sp.project.name || '',
+          description: sp.project.description,
+          customer_id: sp.project.customer?.id || sp.project.customer_id,
+          customer_name: sp.project.customer?.name || sp.project.customer_name,
+          status: sp.project.status || 'active',
+          start_date: sp.project.start_date,
+          end_date: sp.project.end_date,
+          is_active: sp.project.is_active !== false,
         };
 
         await saveProject(offlineProject);
-      } catch (e) {
-        console.warn(`Failed to fetch project ${projectId}:`, e);
+        savedProjects.add(sp.project.id);
       }
     }
 
-    console.log(`Saved ${projectIds.size} projects`);
+    console.log(`Saved ${subprojects.length} subprojects and ${savedProjects.size} projects for rig ${rigId}`);
   } catch (error) {
     console.warn('Failed to fetch projects/subprojects:', error);
     // Non-fatal - continue without project data

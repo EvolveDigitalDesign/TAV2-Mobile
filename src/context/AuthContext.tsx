@@ -279,17 +279,28 @@ export const AuthProvider = ({
         });
         const userInfo = userResponse.data;
 
+        console.log('📱 User info from API:', JSON.stringify(userInfo, null, 2));
+
         // Merge token user data with user info
         const user: User = {
           ...userInfo,
           permissions: tokenUser?.permissions || [],
           tenant_user: tokenUser?.tenant_user || userInfo.tenant_user,
+          // Map tenant object properly (API returns 'tenant' as full object)
+          primary_tenant: userInfo.tenant || undefined,
         };
 
         // Add tenant slug
         if (user.tenant?.name) {
           user.tenant.slug = user.tenant.name.toLowerCase().replace(/\s+/g, '-');
         }
+        
+        console.log('📱 User object after processing:', {
+          id: user.id,
+          email: user.email,
+          tenant: user.tenant,
+          primary_tenant: user.primary_tenant,
+        });
 
         // Store user data in AsyncStorage (tokens already saved above)
         await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(user));

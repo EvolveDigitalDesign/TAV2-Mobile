@@ -9,9 +9,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY} from '../../config/env';
 
 // Create axios instance
+// Note: withCredentials: true matches the web app behavior for consistent auth
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 30000, // 30 seconds
+  withCredentials: true, // Match web app - sends cookies with requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,6 +24,11 @@ apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
       const token = await AsyncStorage.getItem(TOKEN_KEY);
+      console.log('🔐 API Request interceptor:', {
+        url: config.url,
+        hasToken: !!token,
+        tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
+      });
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }

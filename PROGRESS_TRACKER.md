@@ -175,12 +175,12 @@ Use this document to track progress through the migration plan. Update status as
 ## Phase 5: Feature Implementation
 
 ### Task 5.0: Create AppHeader with Offline Toggle
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] Header renders correctly
-- **Verification**: [ ] Toggle accessible from all screens
-- **Notes**: Move OfflineModeToggle and SyncStatusIndicator from ProfileScreen to main AppHeader. Toggle should be readily accessible, NOT in settings.
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Header renders correctly
+- **Verification**: [x] Toggle accessible from all screens
+- **Notes**: Created AppHeader component with OfflineToggleButton, SyncStatusButton, and NetworkStatusIcon. Integrated as custom header in Tab Navigator. Removed toggle from ProfileScreen.
 
 ### Task 5.1: Crew Supervisor Dashboard
 - **Status**: ⏳

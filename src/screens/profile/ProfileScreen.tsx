@@ -1,13 +1,14 @@
 /**
  * Profile Screen
  * User profile display and management
+ * Note: Offline mode toggle has been moved to the AppHeader for easy access
  */
 
 import React from 'react';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {useAuth} from '../../context/AuthContext';
 import {Card, Button} from '../../components/ui';
-import {OfflineModeToggle, SyncStatusIndicator} from '../../components/offline';
+import {SyncStatusIndicator} from '../../components/offline';
 import {useIsOfflineMode} from '../../context/OfflineContext';
 
 export default function ProfileScreen() {
@@ -23,15 +24,9 @@ export default function ProfileScreen() {
     }
   };
 
-  // Get first assigned rig for offline mode
-  const rigId = user?.assigned_departments?.[0]?.id;
-  const rigName = user?.assigned_departments?.[0]?.name;
-
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Profile</Text>
-
         {user && (
           <Card style={styles.profileCard}>
             <View style={styles.profileSection}>
@@ -66,20 +61,24 @@ export default function ProfileScreen() {
                 <Text style={styles.value}>{user.tenant_user.role}</Text>
               </View>
             )}
+
+            {user.assigned_departments && user.assigned_departments.length > 0 && (
+              <View style={styles.profileSection}>
+                <Text style={styles.label}>Assigned Rig</Text>
+                <Text style={styles.value}>
+                  {user.assigned_departments.map(d => d.name).join(', ')}
+                </Text>
+              </View>
+            )}
           </Card>
         )}
 
-        {/* Offline Mode Section */}
-        <Text style={styles.sectionTitle}>Offline Mode</Text>
-        <OfflineModeToggle 
-          rigId={rigId} 
-          rigName={rigName}
-          style={styles.offlineToggle} 
-        />
-
-        {/* Sync Status - only show when offline mode is active */}
+        {/* Sync Status - detailed view when in offline mode */}
         {isOfflineMode && (
-          <SyncStatusIndicator style={styles.syncStatus} />
+          <>
+            <Text style={styles.sectionTitle}>Sync Status</Text>
+            <SyncStatusIndicator style={styles.syncStatus} />
+          </>
         )}
 
         <Button onPress={handleLogout} variant="danger" fullWidth>
@@ -98,14 +97,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    color: '#111827',
-  },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
     marginTop: 8,
@@ -126,9 +119,6 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     color: '#111827',
-  },
-  offlineToggle: {
-    marginBottom: 16,
   },
   syncStatus: {
     marginBottom: 24,
