@@ -115,11 +115,15 @@ This plan minimizes development costs and third-party service dependencies by:
   - Manual caching with AsyncStorage (no React Query needed)
 
 #### Offline Storage
-- **@react-native-async-storage/async-storage** (Built-in alternative)
-  - Free, maintained by React Native community
-  - Simple key-value storage
-  - Store JSON data directly
-  - No database needed for MVP
+- **react-native-sqlite-storage** (SQLite database)
+  - Free, open-source relational database
+  - Proper SQL queries with JOINs and indexes
+  - Better performance for large datasets
+  - Transaction support for data integrity
+  - Schema migrations for version upgrades
+- **@react-native-async-storage/async-storage** (for simple key-value data)
+  - Used for device ID and simple settings
+  - Not used for DWR/record storage
 
 #### UI Components
 - **React Native Built-in Components** (View, Text, TouchableOpacity, etc.)
@@ -585,8 +589,9 @@ interface SyncOperation {
 ### 4.5 Offline Mode UI
 
 **Tasks:**
-- [ ] Create offline mode toggle component
-- [ ] Display offline mode status
+- [ ] Create offline mode toggle component (for main app header)
+- [ ] Integrate toggle into AppHeader (readily accessible, not in settings)
+- [ ] Display offline mode status in header
 - [ ] Show checked-out records count
 - [ ] Display pending sync operations
 - [ ] Create offline mode settings screen
@@ -598,6 +603,34 @@ interface SyncOperation {
 ---
 
 ## Phase 5: Component Migration
+
+### 5.0 AppHeader with Offline Controls (Priority)
+
+**Rationale:** The offline mode toggle must be **readily accessible in the main header**, not buried in settings. Field users need quick access to enable/disable offline mode without navigating away from their work.
+
+**Tasks:**
+- [ ] Create AppHeader component with:
+  - App logo/branding
+  - Screen title (dynamic)
+  - Sync status indicator (online/offline, pending count)
+  - **Offline mode toggle** (prominent placement)
+  - Network status icon
+- [ ] Move OfflineModeToggle from ProfileScreen to AppHeader
+- [ ] Move SyncStatusIndicator to AppHeader
+- [ ] Ensure header is visible on all main screens
+- [ ] Add visual feedback for offline/online state changes
+
+**Header Layout:**
+```
+┌──────────────────────────────────────────────────────────────┐
+│  [Logo]  Screen Title        [Sync: 3 pending] [⚡ Offline] │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Deliverables:**
+- AppHeader component with offline controls
+- Removed offline toggle from settings/profile
+- Consistent header across all screens
 
 ### 5.1 Core UI Components (Custom Built)
 
@@ -1019,13 +1052,13 @@ interface SyncOperation {
 - Cross-platform
 - Free and open source
 
-**Why AsyncStorage instead of WatermelonDB?**
-- Built-in with React Native (no additional dependency)
-- Simple JSON storage sufficient for MVP
-- No database setup or migrations needed
-- Free, no service costs
-- Easier to understand and maintain
-- Can migrate to database later if needed
+**Why SQLite (react-native-sqlite-storage)?**
+- Relational database with proper SQL queries
+- Better performance for complex data relationships (DWR → Work Assignments → Time Records)
+- Indexes for fast lookups on large datasets
+- Transaction support for data integrity
+- Schema migrations for version upgrades
+- Free and open-source
 
 **Why React Native CLI instead of Expo?**
 - No Expo service dependencies

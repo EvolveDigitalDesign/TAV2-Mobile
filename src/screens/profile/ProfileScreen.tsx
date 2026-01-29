@@ -7,10 +7,13 @@ import React from 'react';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {useAuth} from '../../context/AuthContext';
 import {Card, Button} from '../../components/ui';
+import {OfflineModeToggle, SyncStatusIndicator} from '../../components/offline';
+import {useIsOfflineMode} from '../../context/OfflineContext';
 
 export default function ProfileScreen() {
   const {authState, onLogout} = useAuth();
   const {user} = authState;
+  const isOfflineMode = useIsOfflineMode();
 
   const handleLogout = async () => {
     try {
@@ -19,6 +22,10 @@ export default function ProfileScreen() {
       console.error('Logout error:', error);
     }
   };
+
+  // Get first assigned rig for offline mode
+  const rigId = user?.assigned_departments?.[0]?.id;
+  const rigName = user?.assigned_departments?.[0]?.name;
 
   return (
     <ScrollView style={styles.container}>
@@ -62,6 +69,19 @@ export default function ProfileScreen() {
           </Card>
         )}
 
+        {/* Offline Mode Section */}
+        <Text style={styles.sectionTitle}>Offline Mode</Text>
+        <OfflineModeToggle 
+          rigId={rigId} 
+          rigName={rigName}
+          style={styles.offlineToggle} 
+        />
+
+        {/* Sync Status - only show when offline mode is active */}
+        {isOfflineMode && (
+          <SyncStatusIndicator style={styles.syncStatus} />
+        )}
+
         <Button onPress={handleLogout} variant="danger" fullWidth>
           Log Out
         </Button>
@@ -84,6 +104,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     color: '#111827',
   },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 12,
+    marginTop: 8,
+    color: '#111827',
+  },
   profileCard: {
     marginBottom: 24,
   },
@@ -99,5 +126,11 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     color: '#111827',
+  },
+  offlineToggle: {
+    marginBottom: 16,
+  },
+  syncStatus: {
+    marginBottom: 24,
   },
 });

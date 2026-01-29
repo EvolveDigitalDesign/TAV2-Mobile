@@ -5,15 +5,20 @@
  */
 
 import React from 'react';
+import {View, StyleSheet} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAuth} from '../context/AuthContext';
 
 // Import screens
 import SignInScreen from '../screens/auth/SignInScreen';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+
+// Import offline components
+import {NetworkStatusBar} from '../components/offline';
 
 // Navigation types
 export type RootStackParamList = {
@@ -81,16 +86,38 @@ function MainNavigator() {
 export default function AppNavigator() {
   const {authState} = useAuth();
   const isAuthenticated = authState.authenticated === true;
+  const insets = useSafeAreaInsets();
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{headerShown: false}}>
-        {isAuthenticated ? (
-          <Stack.Screen name="Main" component={MainNavigator} />
-        ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+      <View style={styles.container}>
+        <Stack.Navigator screenOptions={{headerShown: false}}>
+          {isAuthenticated ? (
+            <Stack.Screen name="Main" component={MainNavigator} />
+          ) : (
+            <Stack.Screen name="Auth" component={AuthNavigator} />
+          )}
+        </Stack.Navigator>
+        
+        {/* Network Status Bar - shows when offline */}
+        {isAuthenticated && (
+          <View style={[styles.networkBarContainer, {top: insets.top}]}>
+            <NetworkStatusBar showWhenOnline={false} />
+          </View>
         )}
-      </Stack.Navigator>
+      </View>
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  networkBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+});

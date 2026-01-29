@@ -107,48 +107,80 @@ Use this document to track progress through the migration plan. Update status as
 ## Phase 4: Offline Mode (Critical)
 
 ### Task 4.1: Create Offline Storage Service
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] Storage tests pass
-- **Verification**: [ ] Data persists
-- **Notes**: 
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Storage tests pass
+- **Verification**: [x] Data persists
+- **Notes**: **SQLite database** with full schema, indexes, and migrations. Database service with type-safe operations.
 
-### Task 4.2: Implement Checkout Service
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] Checkout tests pass
-- **Verification**: [ ] Records checkout
-- **Notes**: 
+### Task 4.2: Create Offline Types & SQLite Schema
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] TypeScript types compile
+- **Verification**: [x] Types exported correctly
+- **Notes**: Complete type definitions for DWR, WorkAssignment, TimeRecord, Charges, SyncOperation, Checkout metadata. SQLite tables with foreign keys and indexes.
 
-### Task 4.3: Implement Checkin Service
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] Checkin tests pass
-- **Verification**: [ ] Sync works
-- **Notes**: 
+### Task 4.3: Implement Checkout Service
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Checkout tests pass
+- **Verification**: [x] Records checkout
+- **Notes**: Downloads DWRs, work assignments, time records, charges. Supports progress callbacks. Fallback for missing backend endpoint.
 
-### Task 4.4: Implement Sync Service
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] Sync tests pass
-- **Verification**: [ ] Queue works
-- **Notes**: 
+### Task 4.4: Implement Checkin Service
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Checkin tests pass
+- **Verification**: [x] Sync works
+- **Notes**: Collects local changes, syncs to server (bulk or individual), handles conflicts, clears local data
 
-### Task 4.5: Create Offline Mode UI
-- **Status**: ⏳
-- **Started**: [Date]
-- **Completed**: [Date]
-- **Tests**: [ ] UI tests pass
-- **Verification**: [ ] Toggle works
-- **Notes**: 
+### Task 4.5: Implement Sync Service
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Sync tests pass
+- **Verification**: [x] Queue works
+- **Notes**: Operation queue with retry logic, exponential backoff, status tracking
+
+### Task 4.6: Create Network Context
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Network monitoring works
+- **Verification**: [x] Detects offline/online
+- **Notes**: Uses @react-native-community/netinfo, provides useIsOnline hook
+
+### Task 4.7: Create Offline Context
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] Context works
+- **Verification**: [x] State management working
+- **Notes**: Full state management for offline mode with enableOfflineMode, disableOfflineMode, syncNow functions
+
+### Task 4.8: Create Offline Mode UI
+- **Status**: ✅
+- **Started**: 2026-01-29
+- **Completed**: 2026-01-29
+- **Tests**: [x] UI tests pass
+- **Verification**: [x] Toggle works
+- **Notes**: OfflineModeToggle, NetworkStatusBar, SyncStatusIndicator components. Currently in ProfileScreen for testing. **TODO (Phase 5)**: Move toggle to main AppHeader for easy access - offline toggle should NOT be in settings. 
 
 ---
 
 ## Phase 5: Feature Implementation
+
+### Task 5.0: Create AppHeader with Offline Toggle
+- **Status**: ⏳
+- **Started**: [Date]
+- **Completed**: [Date]
+- **Tests**: [ ] Header renders correctly
+- **Verification**: [ ] Toggle accessible from all screens
+- **Notes**: Move OfflineModeToggle and SyncStatusIndicator from ProfileScreen to main AppHeader. Toggle should be readily accessible, NOT in settings.
 
 ### Task 5.1: Crew Supervisor Dashboard
 - **Status**: ⏳
@@ -248,6 +280,6 @@ Use this document to track progress through the migration plan. Update status as
 
 ---
 
-**Last Updated**: [Date]  
-**Current Phase**: Phase [X]  
-**Overall Progress**: [X]% Complete
+**Last Updated**: 2026-01-29  
+**Current Phase**: Phase 4 Complete - Ready for Phase 5  
+**Overall Progress**: 50% Complete (Phases 1-4 of 8)

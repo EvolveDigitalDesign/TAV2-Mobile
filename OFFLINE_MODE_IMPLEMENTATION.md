@@ -17,6 +17,8 @@ This document provides detailed technical specifications for implementing the of
 ### Checkout Scope
 
 When a Crew Supervisor enables offline mode:
+- **Projects**: All projects associated with checked-out subprojects
+- **Subprojects**: All subprojects assigned to the rig
 - **Active Records**: Daily Work Records (DWRs) with status `in_progress`, `in_review`
 - **Queued Records**: DWRs with status `pending`, `draft`
 - **Associated Data**: 
@@ -40,11 +42,15 @@ When a Crew Supervisor enables offline mode:
            │              │
            ▼              ▼
 ┌──────────────────┐  ┌──────────────────┐
-│  AsyncStorage    │  │  Sync Queue     │
-│  (JSON Storage)  │  │  (Pending Ops)  │
-└──────────────────┘  └──────────────────┘
-           │              │
-           └──────┬───────┘
+│  SQLite Database │  │  Sync Queue     │
+│  - projects      │  │  (Pending Ops)  │
+│  - subprojects   │  └──────────────────┘
+│  - dwrs          │         │
+│  - time_records  │         │
+│  - charges       │         │
+└──────────────────┘         │
+           │                 │
+           └──────┬──────────┘
                   ▼
          ┌─────────────────┐
          │  Backend API    │
@@ -170,77 +176,217 @@ Returns any conflicts detected:
 }
 ```
 
-## Local Storage Schema (AsyncStorage + JSON)
+## Local Storage Schema (SQLite)
 
-### TypeScript Interfaces (No Database Models)
+### Database Tables
 
-```typescript
-// DailyWorkRecord Interface
-interface DailyWorkRecord {
-  server_id?: number;
-  checkout_id?: string;
-  subproject_id: number;
-  date: string;
-  ticket_number?: string;
-  notes?: string;
-  status: string;
-  is_checked_out: boolean;
-  has_local_changes: boolean;
-  last_synced_at?: number;
-  work_assignments?: WorkAssignment[];
-  time_records?: EmployeeTimeRecord[];
-  // Full record data
-  [key: string]: any;
-}
+The offline data is stored in a local SQLite database (`TAV2Offline.db`) with the following tables:
 
-// WorkAssignment Interface
-interface WorkAssignment {
-  server_id?: number;
-  local_id?: string; // UUID for new records
-  dwr_id: string;
-  work_description_id?: number;
-  description: string;
-  from_time: string;
-  to_time?: string;
-  has_local_changes: boolean;
-}
+#### Core Tables
 
-// SyncOperation Interface
-interface SyncOperation {
-  id: string; // UUID
-  type: 'create' | 'update' | 'delete';
-  entity: string;
-  entity_id: string; // local ID
-  data: any; // Full entity data
-  status: 'pending' | 'syncing' | 'success' | 'failed';
-  retry_count: number;
-  error?: string;
-  created_at: number;
-}
+```sql
+-- Schema version tracking for migrations
+CREATE TABLE schema_version (
+  id INTEGER PRIMARY KEY,
+  version INTEGER NOT NULL,
+  applied_at TEXT NOT NULL
+);
 
-// CheckoutMetadata Interface
-interface CheckoutMetadata {
-  checkout_id: string;
-  rig_id: number;
-  checked_out_at: number;
-  expires_at: number;
-  device_id: string;
-  is_active: boolean;
-}
+-- Checkout metadata
+CREATE TABLE checkout_metadata (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  checkout_id TEXT NOT NULL UNIQUE,
+  rig_id INTEGER NOT NULL,
+  rig_name TEXT,
+  user_id INTEGER NOT NULL,
+  username TEXT,
+  device_id TEXT NOT NULL,
+  checked_out_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  record_count INTEGER NOT NULL DEFAULT 0,
+  last_sync_at INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Projects
+CREATE TABLE projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  server_id INTEGER NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  customer_id INTEGER,
+  customer_name TEXT,
+  status TEXT DEFAULT 'active',
+  start_date TEXT,
+  end_date TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subprojects (linked to Projects)
+CREATE TABLE subprojects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  server_id INTEGER NOT NULL UNIQUE,
+  project_id INTEGER,
+  name TEXT NOT NULL,
+  job_number TEXT,
+  description TEXT,
+  assigned_rig_id INTEGER,
+  assigned_rig_name TEXT,
+  assigned_rig_number TEXT,
+  well_id INTEGER,
+  well_name TEXT,
+  well_api_number TEXT,
+  customer_id INTEGER,
+  customer_name TEXT,
+  status TEXT DEFAULT 'active',
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES projects(server_id)
+);
+
+-- Daily Work Records
+CREATE TABLE dwrs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  local_id TEXT NOT NULL UNIQUE,
+  server_id INTEGER,
+  subproject_id INTEGER NOT NULL,
+  subproject_data TEXT,  -- JSON for related subproject info
+  date TEXT NOT NULL,
+  ticket_number TEXT,
+  notes TEXT,
+  contact_id INTEGER,
+  contact_data TEXT,  -- JSON for contact info
+  is_last_day INTEGER DEFAULT 0,
+  is_locked INTEGER DEFAULT 0,
+  lock_date TEXT,
+  is_approved INTEGER DEFAULT 0,
+  approved_at TEXT,
+  approved_by INTEGER,
+  status TEXT NOT NULL DEFAULT 'draft',
+  is_checked_out INTEGER DEFAULT 1,
+  has_local_changes INTEGER DEFAULT 0,
+  created_locally INTEGER DEFAULT 0,
+  last_synced_at INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Work Assignments (linked to DWRs)
+CREATE TABLE work_assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  local_id TEXT NOT NULL UNIQUE,
+  server_id INTEGER,
+  dwr_local_id TEXT NOT NULL,
+  work_description_id INTEGER,
+  work_description_data TEXT,  -- JSON
+  description TEXT NOT NULL,
+  from_time TEXT,
+  to_time TEXT,
+  input_values TEXT,  -- JSON
+  is_legacy INTEGER DEFAULT 0,
+  has_local_changes INTEGER DEFAULT 0,
+  created_locally INTEGER DEFAULT 0,
+  deleted_locally INTEGER DEFAULT 0,
+  FOREIGN KEY (dwr_local_id) REFERENCES dwrs(local_id) ON DELETE CASCADE
+);
+
+-- Time Records
+CREATE TABLE time_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  local_id TEXT NOT NULL UNIQUE,
+  server_id INTEGER,
+  dwr_local_id TEXT NOT NULL,
+  employee_id INTEGER NOT NULL,
+  employee_data TEXT,  -- JSON
+  start_time TEXT,
+  stop_time TEXT,
+  rig_time TEXT,
+  travel_time TEXT,
+  role_id INTEGER,
+  role_data TEXT,  -- JSON
+  has_local_changes INTEGER DEFAULT 0,
+  created_locally INTEGER DEFAULT 0,
+  deleted_locally INTEGER DEFAULT 0,
+  FOREIGN KEY (dwr_local_id) REFERENCES dwrs(local_id) ON DELETE CASCADE
+);
+
+-- Charge Records (one per DWR)
+CREATE TABLE charge_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  local_id TEXT NOT NULL UNIQUE,
+  server_id INTEGER,
+  dwr_local_id TEXT NOT NULL,
+  total_amount REAL DEFAULT 0,
+  is_manual_total INTEGER DEFAULT 0,
+  has_local_changes INTEGER DEFAULT 0,
+  FOREIGN KEY (dwr_local_id) REFERENCES dwrs(local_id) ON DELETE CASCADE
+);
+
+-- Charge items (inventory, service, miscellaneous)
+CREATE TABLE inventory_charges (...);
+CREATE TABLE service_charges (...);
+CREATE TABLE miscellaneous_charges (...);
+
+-- Sync queue for pending operations
+CREATE TABLE sync_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL,  -- 'create', 'update', 'delete'
+  entity TEXT NOT NULL,
+  local_id TEXT NOT NULL,
+  server_id INTEGER,
+  dwr_local_id TEXT,
+  data TEXT NOT NULL,  -- JSON
+  status TEXT NOT NULL DEFAULT 'pending',
+  retry_count INTEGER DEFAULT 0,
+  max_retries INTEGER DEFAULT 3,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  synced_at INTEGER
+);
+
+-- Reference data cache
+CREATE TABLE reference_data (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  data TEXT NOT NULL,  -- JSON
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-### Storage Key Structure
+### Indexes for Performance
+
+```sql
+-- Project/Subproject indexes
+CREATE INDEX idx_projects_server_id ON projects(server_id);
+CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_subprojects_server_id ON subprojects(server_id);
+CREATE INDEX idx_subprojects_project_id ON subprojects(project_id);
+CREATE INDEX idx_subprojects_rig_id ON subprojects(assigned_rig_id);
+CREATE INDEX idx_subprojects_status ON subprojects(status);
+
+-- DWR and record indexes
+CREATE INDEX idx_dwrs_server_id ON dwrs(server_id);
+CREATE INDEX idx_dwrs_status ON dwrs(status);
+CREATE INDEX idx_dwrs_subproject_id ON dwrs(subproject_id);
+CREATE INDEX idx_work_assignments_dwr ON work_assignments(dwr_local_id);
+CREATE INDEX idx_time_records_dwr ON time_records(dwr_local_id);
+CREATE INDEX idx_charge_records_dwr ON charge_records(dwr_local_id);
+CREATE INDEX idx_sync_queue_status ON sync_queue(status);
+CREATE INDEX idx_sync_queue_entity ON sync_queue(entity, local_id);
+```
+
+### TypeScript Interfaces
 
 ```typescript
-// Storage keys for AsyncStorage
-const STORAGE_KEYS = {
-  CHECKOUT_METADATA: 'checkout:metadata',
-  CHECKOUT_DWRS: 'checkout:dwrs', // Array of DWR IDs
-  DWR: (id: number | string) => `checkout:dwr:${id}`,
-  WORK_ASSIGNMENT: (id: number | string) => `checkout:work_assignment:${id}`,
-  TIME_RECORD: (id: number | string) => `checkout:time_record:${id}`,
-  SYNC_QUEUE: 'sync:queue', // Array of SyncOperation
-};
+// All interfaces defined in src/types/offline.types.ts
+// Key interfaces: OfflineDWR, OfflineWorkAssignment, OfflineEmployeeTimeRecord, 
+// OfflineChargeRecord, SyncOperation, CheckoutMetadata
 ```
 
 ## Implementation Details
@@ -497,10 +643,27 @@ class ConflictResolver {
 
 ## UI Components
 
-### Offline Mode Toggle
+### UI Placement Strategy
+
+**Important**: The offline mode toggle should be **readily accessible in the main app header**, not buried in settings or profile pages. This ensures field users can quickly enable/disable offline mode without navigation.
+
+**Header Layout:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [Logo]  Dashboard Title     [Sync Status] [Offline Toggle] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The header should display:
+- **Sync Status Indicator**: Shows online/offline, pending sync count
+- **Offline Mode Toggle**: Quick switch with visual feedback
+- **Network Status**: WiFi/cellular indicator when relevant
+
+### Offline Mode Toggle (Header Component)
 
 ```typescript
-// components/OfflineModeToggle.tsx
+// components/offline/OfflineModeToggle.tsx
+// NOTE: This component lives in the main AppHeader, NOT in settings
 
 const OfflineModeToggle: React.FC = () => {
   const { isOfflineMode, toggleOfflineMode } = useOfflineMode();
@@ -693,26 +856,33 @@ export const useOffline = () => {
 ## Implementation Checklist
 
 ### Backend (pnae-django)
-- [ ] Create checkout endpoint
-- [ ] Create checkin endpoint
+- [ ] Create checkout endpoint (`POST /api/workrecords/checkout/`)
+- [ ] Create checkin endpoint (`POST /api/workrecords/checkin/`)
 - [ ] Implement checkout locking mechanism
 - [ ] Implement conflict detection
 - [ ] Add checkout expiration
 - [ ] Add checkout metadata model
 
 ### Mobile App
-- [ ] Set up AsyncStorage service
-- [ ] Create TypeScript interfaces for data models
-- [ ] Implement checkout service (using AsyncStorage)
-- [ ] Implement checkin service (using AsyncStorage)
-- [ ] Implement sync service (using AsyncStorage)
-- [ ] Implement conflict resolver
-- [ ] Create offline mode UI
-- [ ] Create sync status UI
-- [ ] Add error handling
-- [ ] Add logging/monitoring
-- [ ] Write tests
+- [x] Set up SQLite database (`react-native-sqlite-storage`)
+- [x] Create database schema with tables and indexes
+- [x] Implement database initialization and migrations
+- [x] Create TypeScript interfaces for data models
+- [x] Implement storage service (using SQLite)
+- [x] Implement checkout service
+- [x] Implement checkin service
+- [x] Implement sync service with retry logic
+- [x] Create NetworkContext for connectivity monitoring
+- [x] Create OfflineContext for state management
+- [x] Create OfflineModeToggle component
+- [x] Create NetworkStatusBar component
+- [x] Create SyncStatusIndicator component
+- [ ] Implement conflict resolver UI
+- [x] Add error handling
+- [ ] Add logging/monitoring (Sentry integration)
+- [ ] Write unit tests for offline services
 
 ---
 
 *This document should be updated as implementation progresses.*
+

@@ -4,14 +4,23 @@
  */
 
 import React from 'react';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {AuthProvider} from './src/context/AuthContext';
+import {NetworkProvider} from './src/context/NetworkContext';
+import {OfflineProvider} from './src/context/OfflineContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 function App(): React.JSX.Element {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <NetworkProvider>
+        <AuthProvider>
+          <OfflineProvider>
+            <AppNavigator />
+          </OfflineProvider>
+        </AuthProvider>
+      </NetworkProvider>
+    </SafeAreaProvider>
   );
 }
 
