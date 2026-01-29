@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AuthContextProps, AuthState, User} from '../types/auth.types';
 import apiClient from '../services/api/client';
 import {API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_DATA_KEY} from '../config/env';
+import {base64Decode} from '../utils/base64';
 
 // JWT token validation
 const isTokenValid = (token: string): boolean => {
@@ -24,7 +25,7 @@ const isTokenValid = (token: string): boolean => {
   }
 
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(base64Decode(token.split('.')[1]));
     const expirationTime = payload.exp * 1000;
     return Date.now() < expirationTime;
   } catch {
@@ -213,7 +214,7 @@ export const AuthProvider = ({
 
     try {
       // Calculate token expiration time
-      const payload = JSON.parse(atob(authState.token.split('.')[1]));
+        const payload = JSON.parse(base64Decode(authState.token.split('.')[1]));
       const expirationTime = payload.exp * 1000;
       const now = Date.now();
       const timeUntilExpiry = expirationTime - now;
@@ -265,8 +266,17 @@ export const AuthProvider = ({
 
         const {access, refresh, user: tokenUser} = tokenResponse.data;
 
-        // Get user info
-        const userResponse = await apiClient.get('/api/user/info/');
+        // Save token to AsyncStorage FIRST so subsequent requests can use it
+        await AsyncStorage.setItem(TOKEN_KEY, access);
+        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+
+        // Get user info - now the interceptor will have the token
+        // Also pass the header directly in case AsyncStorage read is slow
+        const userResponse = await apiClient.get('/api/user/info/', {
+          headers: {
+            Authorization: `Bearer ${access}`,
+          },
+        });
         const userInfo = userResponse.data;
 
         // Merge token user data with user info
@@ -281,9 +291,7 @@ export const AuthProvider = ({
           user.tenant.slug = user.tenant.name.toLowerCase().replace(/\s+/g, '-');
         }
 
-        // Store everything in AsyncStorage
-        await AsyncStorage.setItem(TOKEN_KEY, access);
-        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+        // Store user data in AsyncStorage (tokens already saved above)
         await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(user));
 
         setAuthState({

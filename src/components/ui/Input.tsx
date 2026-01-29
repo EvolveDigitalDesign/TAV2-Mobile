@@ -30,7 +30,7 @@ export default function Input({
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
       <RNTextInput
-        style={[styles.input, error && styles.inputError, style]}
+        style={[styles.input, error ? styles.inputError : undefined, style]}
         placeholderTextColor="#9ca3af"
         {...props}
       />

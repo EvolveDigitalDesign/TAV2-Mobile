@@ -23,13 +23,19 @@ const getApiUrl = (): string => {
     // For Android emulator, use 10.0.2.2 to access host machine's localhost
     // For iOS simulator, localhost works fine
     // For physical devices, you'll need to set your machine's IP
-    const platform = require('react-native').Platform.OS;
-    
-    if (platform === 'android') {
-      // Android emulator uses 10.0.2.2 to access host machine
-      return 'http://10.0.2.2:8000';
-    } else {
-      // iOS simulator can use localhost
+    try {
+      const {Platform} = require('react-native');
+      const platform = Platform.OS;
+      
+      if (platform === 'android') {
+        // Android emulator uses 10.0.2.2 to access host machine
+        return 'http://10.0.2.2:8000';
+      } else {
+        // iOS simulator can use localhost
+        return 'http://localhost:8000';
+      }
+    } catch {
+      // Fallback if Platform is not available
       return 'http://localhost:8000';
     }
   }
